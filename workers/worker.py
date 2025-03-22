@@ -1,21 +1,33 @@
 import pika
-import csv
-import io
+import json
+import pandas as pd
+import os
 import requests
 
-def process_csv(csv_data):
-    # Parse CSV data into a list of dictionaries
-    csv_file = io.StringIO(csv_data)
-    reader = csv.DictReader(csv_file)
-    return list(reader)
+# Path to the CSV file
+CSV_FILE = '../flask_app/data.csv'
+
+def process_csv_task(operation, data):
+    df = pd.read_csv(CSV_FILE)
+    if operation == "add":
+        # Add a new row to the CSV
+        new_row = pd.DataFrame([data])  
+        df = pd.concat([df, new_row], ignore_index=True)
+    elif operation == "delete":
+        # Delete a row by name
+        df = df[df['name'] != data['name']]
+    # Save the updated CSV
+    df.to_csv(CSV_FILE, index=False)
 
 def callback(ch, method, properties, body):
-    csv_data = body.decode('utf-8')
-    print(" [x] Received CSV task")
-    processed_data = process_csv(csv_data)
-    print("Processed Data:", processed_data)
-    # Send processed data back to master via API call
-    requests.post('http://127.0.0.1:5000/update', json=processed_data)
+    message = json.loads(body.decode('utf-8'))
+    operation = message.get("operation")
+    data = message.get("data")
+    print(f" [x] Received {operation} task")
+    process_csv_task(operation, data)
+    # Send the updated CSV data back to the Flask app
+    # df = pd.read_csv(CSV_FILE)
+    # requests.post('http://127.0.0.1:5000/update', json=df.to_dict(orient='records'))
 
 # Start consuming messages
 connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
